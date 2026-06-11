@@ -23,10 +23,7 @@ class _RequestGasScreenState extends State<RequestGasScreen> {
   String _size = '12 kg';
   int _agentIndex = 0;
 
-  double get _total {
-    final unit = _size == '12 kg' ? 7000.0 : 12000.0;
-    return unit * _quantity;
-  }
+  double get _total => appStore.orderTotal(_size, _quantity);
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +57,7 @@ class _RequestGasScreenState extends State<RequestGasScreen> {
                       Expanded(
                         child: _SizeOption(
                           label: '12 kg',
-                          price: 7000,
+                          price: appStore.unitPriceFor('12 kg'),
                           selected: _size == '12 kg',
                           onTap: () => setState(() => _size = '12 kg'),
                         ),
@@ -69,7 +66,7 @@ class _RequestGasScreenState extends State<RequestGasScreen> {
                       Expanded(
                         child: _SizeOption(
                           label: '20 kg',
-                          price: 12000,
+                          price: appStore.unitPriceFor('20 kg'),
                           selected: _size == '20 kg',
                           onTap: () => setState(() => _size = '20 kg'),
                         ),

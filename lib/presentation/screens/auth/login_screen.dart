@@ -140,12 +140,17 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  /// Demo social sign-in: signs in as a citizen on-device. Real OAuth is wired
-  /// automatically once Firebase is configured.
+  /// Social sign-in. With Firebase live, "google" runs the real OAuth flow;
+  /// other providers (Apple) fall back to a friendly notice. In demo mode any
+  /// provider signs in as a citizen on-device.
   Future<void> _demoSocialSignIn(String provider) async {
     if (_loading) return;
     if (AuthService.ready) {
-      _showError(L10n.isAr ? 'سيتوفر قريباً' : 'Coming soon');
+      if (provider == 'google') {
+        await _googleSignIn();
+      } else {
+        _showError(L10n.isAr ? 'سيتوفر قريباً' : 'Coming soon');
+      }
       return;
     }
     setState(() => _loading = true);
@@ -165,6 +170,44 @@ class _LoginScreenState extends State<LoginScreen>
     if (!mounted) return;
     setState(() => _loading = false);
     Navigator.pushReplacementNamed(context, AppRoutes.citizenHome);
+  }
+
+  /// Real Google OAuth via Firebase. Routes by role and seeds on admin like the
+  /// email flow does.
+  Future<void> _googleSignIn() async {
+    setState(() => _loading = true);
+    try {
+      await AuthService.signInWithGoogle();
+      final role = await AuthService.roleForCurrentUser();
+      if (role == 'admin') {
+        await SeedService.seedIfEmpty();
+      }
+      final prof = await AuthService.profileForCurrentUser();
+      Session.isGuest = false;
+      if (prof != null) {
+        Session.saveProfile(
+          name: prof['name'] as String?,
+          email: prof['email'] as String?,
+          phone: prof['phone'] as String?,
+          region: prof['region'] as String?,
+        );
+        Session.profileComplete = prof['profileComplete'] == true;
+        Session.isJoined = prof['isJoined'] == true;
+      }
+      Session.role = role;
+      await MessagingService.registerToken();
+      if (!mounted) return;
+      setState(() => _loading = false);
+      Navigator.pushReplacementNamed(context, _routeForRole(role));
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      _showError(_authError(e.code));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      _showError(L10n.isAr ? 'تعذّر تسجيل الدخول عبر جوجل' : 'Google sign-in failed');
+    }
   }
 
   void _showError(String message) {

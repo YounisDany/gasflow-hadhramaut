@@ -53,17 +53,16 @@ class AppBottomNav extends StatelessWidget {
                 builder: (context, c) {
                   final n = items.length;
                   final cellW = c.maxWidth / n;
-                  final t = n == 1 ? 0.0 : currentIndex / (n - 1);
                   return Stack(
-                    alignment: Alignment.center,
                     children: [
-                      AnimatedAlign(
+                      AnimatedPositioned(
                         duration: const Duration(milliseconds: 320),
                         curve: Curves.easeOutCubic,
-                        alignment: Alignment(-1 + 2 * t, 0),
-                        child: Container(
-                          width: cellW - 10,
-                          height: 48,
+                        left: currentIndex * cellW + 5,
+                        top: 8,
+                        width: cellW - 10,
+                        height: 48,
+                        child: DecoratedBox(
                           decoration: BoxDecoration(
                             color: AppColors.primary.withValues(alpha: 0.14),
                             borderRadius: BorderRadius.circular(16),

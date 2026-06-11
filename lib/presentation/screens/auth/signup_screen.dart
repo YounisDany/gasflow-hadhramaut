@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/l10n/l10n.dart';
 import '../../../core/routes/app_routes.dart';
+import '../../../core/services/prefs.dart';
 import '../../../core/session/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -52,14 +53,21 @@ class _SignupScreenState extends State<SignupScreen>
     setState(() => _loading = true);
 
     // Demo mode (Firebase not configured): skip account creation and go
-    // straight to the details step.
+    // straight to the details step. Still guard against a duplicate email by
+    // checking the locally-registered set.
     if (!AuthService.ready) {
       await Future<void>.delayed(const Duration(milliseconds: 300));
       if (!mounted) return;
       setState(() => _loading = false);
+      if (Prefs.isEmailRegistered(_email.text)) {
+        _showError(_authError('email-already-in-use'));
+        return;
+      }
+      await Prefs.registerEmail(_email.text);
       Session.isGuest = false;
       Session.profileComplete = false;
       Session.saveProfile(email: _email.text.trim());
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, AppRoutes.dataRegistration);
       return;
     }

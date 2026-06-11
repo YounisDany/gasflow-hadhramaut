@@ -66,6 +66,32 @@ class AuthService {
     _db.collection('users').doc(user.uid).set(data, SetOptions(merge: true));
   }
 
+  /// Real Google sign-in using Firebase Auth's native provider flow (opens the
+  /// platform OAuth screen — no extra package needed). Ensures a `users/{uid}`
+  /// profile exists with the citizen role on first sign-in. Requires the Google
+  /// provider to be enabled in the Firebase Console and the app's SHA-1 added.
+  static Future<UserCredential> signInWithGoogle() async {
+    final provider = GoogleAuthProvider()
+      ..addScope('email')
+      ..setCustomParameters({'prompt': 'select_account'});
+    final cred = await _auth.signInWithProvider(provider);
+    final user = cred.user;
+    if (user != null) {
+      final ref = _db.collection('users').doc(user.uid);
+      final doc = await ref.get();
+      if (!doc.exists) {
+        await ref.set({
+          'email': user.email ?? '',
+          'name': user.displayName ?? '',
+          'role': 'citizen',
+          'profileComplete': false,
+          'createdAt': DateTime.now().millisecondsSinceEpoch,
+        }, SetOptions(merge: true));
+      }
+    }
+    return cred;
+  }
+
   static Future<void> sendPasswordReset(String email) =>
       _auth.sendPasswordResetEmail(email: email.trim());
 

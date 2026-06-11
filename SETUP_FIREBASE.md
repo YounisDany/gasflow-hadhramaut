@@ -105,3 +105,41 @@ flutter run
 - **الإشعارات حالياً تُبثّ للجميع** (broadcast). للتوجيه لمستخدم محدّد: استخدم حقل `to` في وثيقة الإشعار وفلتر التوكنات في `functions/index.js`.
 - إن ظهرت السطور فارغة وطلع في الـ log `⚠️ Firebase init failed` → لم يكتمل `flutterfire configure` أو ناقص `google-services.json`.
 - لتشديد قواعد الأمان قبل الإنتاج: راجِع `firestore.rules` (حالياً متساهلة لتسهيل التجربة).
+
+---
+
+## تحديثات هذه الجلسة (مطلوب منك في الكونسول) 🔧
+
+### أ) تفعيل تسجيل الدخول عبر Google
+الكود صار يستخدم تدفّق Google الحقيقي (`AuthService.signInWithGoogle()` عبر `signInWithProvider`). علشان يشتغل على جوالك لازم خطوتين في الكونسول:
+
+1. **فعّل مزوّد Google:**
+   - Firebase Console → مشروع `gas-app-f3481` → **Authentication → Sign-in method**.
+   - اضغط **Google** → **Enable** → اختر *Project support email* → **Save**.
+
+2. **أضف بصمة SHA-1 (وSHA-256) لتطبيق أندرويد:**
+   - ولّد البصمة من جذر المشروع:
+     ```bash
+     cd android && ./gradlew signingReport
+     ```
+     (على ويندوز: `cd android; .\gradlew signingReport`) — انسخ سطر **SHA1** و**SHA-256** من إعداد `debug`.
+   - في الكونسول → **Project settings (⚙️) → General → Your apps → تطبيق أندرويد** → **Add fingerprint** → الصق SHA-1 ثم SHA-256 → **Save**.
+   - حمّل `google-services.json` المحدّث وضعه في `android/app/` (استبدل القديم)، ثم أعد البناء.
+
+> بدون هاتين الخطوتين زر Google يطلع خطأ. زر Apple يبقى «سيتوفر قريباً» (يحتاج حساب Apple Developer).
+
+### ب) قواعد Firestore (تم نشرها ✅)
+- نشرتُ `firestore.rules` **مفتوحة بالكامل** (`allow read, write: if true`) لمشروع `gas-app-f3481` عبر:
+  ```bash
+  firebase deploy --only firestore:rules
+  ```
+- هذا يسمح للتطبيق ببذر البيانات وقراءتها بدون تسجيل دخول (وضع تجريبي مدرسي). **شدّدها قبل الإنتاج.**
+
+### ج) الإشعارات
+- **داخل التطبيق:** تشتغل لحظياً عبر Firestore (صفحة الإشعارات + الشارة) — جاهزة.
+- **Push (والتطبيق مقفل):** انشر الدالة السحابية:
+  ```bash
+  cd functions && npm install && cd ..
+  firebase deploy --only functions
+  ```
+  (تحتاج تفعيل الفوترة Blaze لتشغيل Cloud Functions. بدونها الإشعارات داخل التطبيق تكفي للعرض.)

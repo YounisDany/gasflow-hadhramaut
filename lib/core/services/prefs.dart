@@ -104,6 +104,27 @@ class Prefs {
     await _prefs.remove(_kLng);
   }
 
+  // ─────────────── Registered emails (demo duplicate-account guard) ───────────────
+  // In demo mode there is no backend to reject a duplicate sign-up, so we keep a
+  // local set of emails that have already registered on this device and block
+  // re-using one. Stored normalised (trimmed + lower-cased).
+  static const _kRegisteredEmails = 'registered_emails';
+
+  static List<String> get _registeredEmails =>
+      _prefs.getStringList(_kRegisteredEmails) ?? const [];
+
+  static bool isEmailRegistered(String email) =>
+      _registeredEmails.contains(email.trim().toLowerCase());
+
+  static Future<void> registerEmail(String email) async {
+    final e = email.trim().toLowerCase();
+    if (e.isEmpty) return;
+    final list = _registeredEmails.toList();
+    if (list.contains(e)) return;
+    list.add(e);
+    await _prefs.setStringList(_kRegisteredEmails, list);
+  }
+
   // Generic helpers used by the session and the offline store.
   static String? getString(String key) => _prefs.getString(key);
   static Future<void> setString(String key, String value) =>

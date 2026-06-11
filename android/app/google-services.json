@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "314227834152",
+    "firebase_url": "https://gas-app-f3481-default-rtdb.firebaseio.com",
+    "project_id": "gas-app-f3481",
+    "storage_bucket": "gas-app-f3481.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:314227834152:android:e613c902d3dbe7b2bee41d",
+        "android_client_info": {
+          "package_name": "com.example.gas_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDHhhhkhWpxbTPCYy3VnRsabrAS06rOd58"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:314227834152:android:66b5c9c499d29e23bee41d",
+        "android_client_info": {
+          "package_name": "com.younisdany.gas_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDHhhhkhWpxbTPCYy3VnRsabrAS06rOd58"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

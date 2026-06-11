@@ -50,6 +50,7 @@ class S {
   static String get statusAccepted => _ar ? 'مقبول' : 'Accepted';
   static String get statusRejected => _ar ? 'مرفوض' : 'Rejected';
   static String get statusCompleted => _ar ? 'مكتمل' : 'Completed';
+  static String get statusSuspended => _ar ? 'مجمّد' : 'Suspended';
 
   // ─────────────── Auth ───────────────
   static String get welcomeBack => _ar ? 'مرحباً بعودتك' : 'Welcome back';
@@ -329,6 +330,14 @@ class S {
       _ar ? 'موزعون قريبون' : 'Nearby agents';
   static String kmAway(double km) =>
       _ar ? '${km.toStringAsFixed(1)} كم' : '${km.toStringAsFixed(1)} km away';
+  static String etaAway(int min) =>
+      _ar ? '≈ $min د' : '≈ $min min';
+  static String get myCurrentLocation =>
+      _ar ? 'موقعي الحالي' : 'My current location';
+  static String get nearestCitizen =>
+      _ar ? 'أقرب عميل' : 'Nearest citizen';
+  static String get routeToCitizen =>
+      _ar ? 'المسار إلى العميل' : 'Route to citizen';
   static String get tabRequest => _ar ? 'طلب' : 'Request';
   static String get tabSupport => _ar ? 'الدعم' : 'Support';
 
@@ -634,6 +643,51 @@ class S {
   static String get adminName => _ar ? 'مدير النظام' : 'System Administrator';
   static String get role => _ar ? 'الصلاحية' : 'Role';
   static String get superAdmin => _ar ? 'مشرف عام' : 'Super admin';
+
+  // ─────────────── Admin actions (delete / freeze / pricing / export) ───────────────
+  static String get delete => _ar ? 'حذف' : 'Delete';
+  static String get freeze => _ar ? 'تجميد' : 'Freeze';
+  static String get unfreeze => _ar ? 'إلغاء التجميد' : 'Unfreeze';
+  static String get confirm => _ar ? 'تأكيد' : 'Confirm';
+  static String get deleteAgentTitle =>
+      _ar ? 'حذف الموزع؟' : 'Delete agent?';
+  static String deleteAgentDesc(String name) => _ar
+      ? 'سيتم حذف $name نهائياً من النظام.'
+      : '$name will be permanently removed from the system.';
+  static String get deleteUserTitle => _ar ? 'حذف المستخدم؟' : 'Delete user?';
+  static String deleteUserDesc(String name) => _ar
+      ? 'سيتم حذف $name نهائياً من النظام.'
+      : '$name will be permanently removed from the system.';
+  static String deletedMsg(String name) =>
+      _ar ? 'تم حذف $name' : '$name deleted';
+  static String frozenMsg(String name) =>
+      _ar ? 'تم تجميد $name' : '$name suspended';
+  static String unfrozenMsg(String name) =>
+      _ar ? 'تم تفعيل $name' : '$name reactivated';
+  static String get actions => _ar ? 'الإجراءات' : 'Actions';
+
+  // ─────────────── Pricing rules ───────────────
+  static String get pricingTitle => _ar ? 'قواعد التسعير' : 'Pricing rules';
+  static String get basePriceLabel =>
+      _ar ? 'سعر الاسطوانة الأساسي' : 'Base price per cylinder';
+  static String get basePriceHint => _ar ? 'مثال: 3500' : 'e.g. 3500';
+  static String get serviceFeeLabel =>
+      _ar ? 'رسوم الخدمة' : 'Service fee';
+  static String get serviceFeeHint => _ar ? 'مثال: 500' : 'e.g. 500';
+  static String get pricingNote => _ar
+      ? 'تُطبَّق هذه الأسعار على شاشة طلب الغاز للعملاء.'
+      : 'These prices apply on the citizen request screen.';
+  static String get pricingSaved =>
+      _ar ? 'تم حفظ التسعير' : 'Pricing saved';
+  static String get priceRequired =>
+      _ar ? 'أدخل قيمة صحيحة' : 'Enter a valid value';
+  static String get savePricing => _ar ? 'حفظ التسعير' : 'Save pricing';
+
+  // ─────────────── Data export ───────────────
+  static String get exporting => _ar ? 'جاري التصدير…' : 'Exporting…';
+  static String get exportReady => _ar ? 'تم تجهيز الملف' : 'Export ready';
+  static String get exportEmpty =>
+      _ar ? 'لا توجد بيانات للتصدير' : 'No data to export';
 
   // ─────────────── Location ───────────────
   static String get yourLocation => _ar ? 'موقعك' : 'Your location';

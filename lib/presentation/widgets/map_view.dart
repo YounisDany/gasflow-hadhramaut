@@ -28,6 +28,10 @@ class MapView extends StatefulWidget {
   final ValueChanged<int>? onSelect;
   final LatLng? userLocation;
 
+  /// Optional ordered points to draw as a route line (e.g. agent → citizen).
+  /// Null or fewer than two points draws nothing.
+  final List<LatLng>? route;
+
   /// Fallback center when there are no pins and no user location.
   final LatLng fallbackCenter;
 
@@ -37,6 +41,7 @@ class MapView extends StatefulWidget {
     this.selectedIndex = -1,
     this.onSelect,
     this.userLocation,
+    this.route,
     this.fallbackCenter = const LatLng(15.9437, 48.7888), // Seiyun, Hadhramaut
   });
 
@@ -120,6 +125,18 @@ class _MapViewState extends State<MapView>
               userAgentPackageName: 'com.younisdany.gas_app',
               maxZoom: 19,
             ),
+            if (widget.route != null && widget.route!.length >= 2)
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: widget.route!,
+                    strokeWidth: 4,
+                    color: AppColors.primary.withValues(alpha: 0.8),
+                    borderStrokeWidth: 1.5,
+                    borderColor: Colors.white.withValues(alpha: 0.7),
+                  ),
+                ],
+              ),
             if (widget.userLocation != null)
               MarkerLayer(markers: [_userMarker(widget.userLocation!)]),
             MarkerLayer(markers: [

@@ -37,6 +37,41 @@ class AppStore extends ChangeNotifier {
   String? _currentOrderId;
   int _seq = 0;
 
+  // ─────────────── Pricing rules (admin-controlled) ───────────────
+  // Persisted in Prefs so both demo and Firebase modes survive relaunch; in
+  // Firebase mode also mirrored to settings/pricing for cross-device sharing.
+  static const _kBasePrice = 'pricing_base';
+  static const _kServiceFee = 'pricing_fee';
+  double basePrice = 7000;
+  double serviceFee = 0;
+
+  /// Price for a single cylinder of [size] before the service fee.
+  double unitPriceFor(String size) =>
+      size == '20 kg' ? (basePrice * 1.7).roundToDouble() : basePrice;
+
+  /// Full order total: cylinders × unit price + the flat service fee.
+  double orderTotal(String size, int qty) =>
+      unitPriceFor(size) * qty + serviceFee;
+
+  void loadPricing() {
+    basePrice = double.tryParse(Prefs.getString(_kBasePrice) ?? '') ?? 7000;
+    serviceFee = double.tryParse(Prefs.getString(_kServiceFee) ?? '') ?? 0;
+  }
+
+  Future<void> setPricing({required double base, required double fee}) async {
+    basePrice = base;
+    serviceFee = fee;
+    await Prefs.setString(_kBasePrice, '$base');
+    await Prefs.setString(_kServiceFee, '$fee');
+    if (!localMode) {
+      _db.collection('settings').doc('pricing').set({
+        'basePrice': base,
+        'serviceFee': fee,
+      });
+    }
+    notifyListeners();
+  }
+
   final List<AgentModel> agents = [];
   final List<CitizenModel> citizens = [];
   final List<OrderModel> orders = [];
@@ -280,6 +315,85 @@ class AppStore extends ChangeNotifier {
       );
     }
     if (localMode) _localCommit('agentStatus');
+  }
+
+  /// Suspend (freeze) or reactivate an agent. Freezing keeps the record but
+  /// blocks them; reactivating restores them to accepted.
+  Future<void> setAgentSuspended(AgentModel agent, bool suspended) async {
+    final status = suspended ? AppStatus.suspended : AppStatus.accepted;
+    if (localMode) {
+      final i = agents.indexWhere((a) => a.id == agent.id);
+      if (i >= 0) agents[i] = agents[i].copyWith(status: status);
+      _localCommit('agentSuspend');
+    } else {
+      _agentsCol.doc(agent.id).update({'status': status.name});
+    }
+  }
+
+  /// Permanently remove an agent from the system.
+  Future<void> deleteAgent(AgentModel agent) async {
+    if (localMode) {
+      agents.removeWhere((a) => a.id == agent.id);
+      _localCommit('deleteAgent');
+    } else {
+      _agentsCol.doc(agent.id).delete();
+    }
+  }
+
+  /// Permanently remove a citizen from the system.
+  Future<void> deleteCitizen(CitizenModel citizen) async {
+    if (localMode) {
+      citizens.removeWhere((c) => c.id == citizen.id);
+      _localCommit('deleteCitizen');
+    } else {
+      _citizensCol.doc(citizen.id).delete();
+    }
+  }
+
+  // ─────────────── Data export ───────────────
+  /// Build a CSV snapshot of agents, citizens and orders for the admin export.
+  String exportCsv() {
+    String esc(Object? v) {
+      final s = '$v'.replaceAll('"', '""');
+      return '"$s"';
+    }
+
+    final b = StringBuffer();
+    b.writeln('SECTION,id,name,phone,area/address,status,extra');
+    for (final a in agents) {
+      b.writeln([
+        'AGENT',
+        esc(a.id),
+        esc(a.nameEn),
+        esc(a.phone),
+        esc(a.areaEn),
+        esc(a.status.name),
+        esc('rating=${a.rating} citizens=${a.citizens}'),
+      ].join(','));
+    }
+    for (final c in citizens) {
+      b.writeln([
+        'CITIZEN',
+        esc(c.id),
+        esc(c.nameEn),
+        esc(c.phone),
+        esc(c.addressEn),
+        esc(c.status.name),
+        esc(c.barcodeId ?? ''),
+      ].join(','));
+    }
+    for (final o in orders) {
+      b.writeln([
+        'ORDER',
+        esc(o.id),
+        esc(o.citizenNameEn),
+        esc(''),
+        esc(o.addressEn),
+        esc(o.status.name),
+        esc('${o.cylinders}x${o.size} total=${o.total}'),
+      ].join(','));
+    }
+    return b.toString();
   }
 
   // ─────────────── Citizens (agent) ───────────────

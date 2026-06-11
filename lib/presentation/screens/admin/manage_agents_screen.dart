@@ -227,12 +227,50 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
     );
   }
 
+  void _snack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.textPrimary,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(20),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        content: Text(message),
+      ),
+    );
+  }
+
+  void _confirmDeleteAgent(AgentModel a) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(S.deleteAgentTitle),
+        content: Text(S.deleteAgentDesc(a.name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(S.cancel),
+          ),
+          TextButton(
+            onPressed: () {
+              appStore.deleteAgent(a);
+              Navigator.pop(ctx);
+              _snack(S.deletedMsg(a.name));
+            },
+            child: Text(S.delete,
+                style: const TextStyle(color: AppColors.danger)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showAgentDetails(AgentModel a) {
+    final isSuspended = a.status == AppStatus.suspended;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
+      builder: (sheetCtx) => Container(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
         decoration: BoxDecoration(
           color: AppColors.surface,
@@ -279,6 +317,49 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
             _DetailRow(
               icon: Icons.star_rounded,
               label: S.ratingCitizens(a.rating, a.citizens),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      appStore.setAgentSuspended(a, !isSuspended);
+                      Navigator.pop(sheetCtx);
+                      _snack(isSuspended
+                          ? S.unfrozenMsg(a.name)
+                          : S.frozenMsg(a.name));
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.warning,
+                      side: const BorderSide(color: AppColors.warning),
+                      minimumSize: const Size.fromHeight(46),
+                    ),
+                    icon: Icon(
+                        isSuspended
+                            ? Icons.play_circle_outline_rounded
+                            : Icons.pause_circle_outline_rounded,
+                        size: 18),
+                    label: Text(isSuspended ? S.unfreeze : S.freeze),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(sheetCtx);
+                      _confirmDeleteAgent(a);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.danger,
+                      side: const BorderSide(color: AppColors.danger),
+                      minimumSize: const Size.fromHeight(46),
+                    ),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                    label: Text(S.delete),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

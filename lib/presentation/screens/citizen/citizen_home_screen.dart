@@ -3,6 +3,9 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../core/l10n/l10n.dart';
 import '../../../core/routes/app_routes.dart';
+import '../../../core/services/geo.dart';
+import '../../../core/services/prefs.dart';
+import '../../../core/services/location_service.dart';
 import '../../../core/session/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -10,6 +13,7 @@ import '../../../data/models/agent_model.dart';
 import '../../../data/store/app_store.dart';
 import '../../widgets/auth_gate.dart';
 import '../../widgets/avatar.dart';
+import '../../widgets/location_picker.dart';
 import '../../widgets/map_view.dart';
 import '../../widgets/sync_indicator.dart';
 import '../shell/main_shell.dart';
@@ -28,10 +32,20 @@ class _CitizenHomeScreenState extends State<CitizenHomeScreen> {
   int _selected = 0;
 
   // Nearest located agents first, capped at four for the map + slider.
+  // Distance is computed live from the user's GPS location when available,
+  // otherwise it falls back to the agent's stored value.
   List<AgentModel> get _agents {
     final list = appStore.agents.where((a) => a.hasLocation).toList()
-      ..sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
+      ..sort((a, b) => _distanceFor(a).compareTo(_distanceFor(b)));
     return list.take(4).toList();
+  }
+
+  /// Real geodesic distance (km) from the user to [a], or the stored estimate
+  /// when the user hasn't shared a location yet.
+  double _distanceFor(AgentModel a) {
+    final user = _userLocation;
+    if (user == null || !a.hasLocation) return a.distanceKm;
+    return Geo.km(user, LatLng(a.lat!, a.lng!));
   }
 
   LatLng? get _userLocation {
@@ -156,6 +170,7 @@ class _CitizenHomeScreenState extends State<CitizenHomeScreen> {
                           padding: const EdgeInsets.fromLTRB(6, 4, 6, 8),
                           child: _AgentCard(
                             agent: a,
+                            distanceKm: _distanceFor(a),
                             selected: selected,
                             isJoined: isJoined,
                             onRequest: _onRequestPressed,
@@ -232,15 +247,67 @@ class _CompleteProfileBanner extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
+  /// Persists a freshly chosen location to the live session and (when the user
+  /// is signed in with remember-me) to disk so it survives relaunches.
+  Future<void> _saveLocation(double lat, double lng) async {
+    Session.saveProfile(lat: lat, lng: lng);
+    if (Prefs.signedIn) {
+      await Prefs.saveSession(
+        role: Session.role,
+        name: Session.nameNotifier.value,
+        email: Session.emailNotifier.value,
+        phone: Session.phoneNotifier.value,
+        region: Session.regionNotifier.value,
+        profileComplete: Session.profileComplete,
+        isJoined: Session.isJoined,
+        lat: lat,
+        lng: lng,
+      );
+    }
+  }
+
+  Future<void> _useCurrentLocation(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final res = await LocationService.current();
+    if (res.ok) {
+      await _saveLocation(res.point!.latitude, res.point!.longitude);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(S.locationSet),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(res.error ?? S.locationPermissionDenied),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickOnMap(BuildContext context) async {
+    final initial = Session.hasLocation
+        ? LatLng(Session.latNotifier.value!, Session.lngNotifier.value!)
+        : null;
+    final picked = await showLocationPicker(context, initial: initial);
+    if (picked != null) {
+      await _saveLocation(picked.latitude, picked.longitude);
+    }
+  }
+
   void _showLocationPicker(BuildContext context) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
+      builder: (sheet) => Container(
         padding: const EdgeInsets.only(top: 12, bottom: 32, left: 24, right: 24),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -257,22 +324,27 @@ class _Header extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            Text(L10n.isAr ? 'تغيير الموقع' : 'Change Location', 
-                 style: AppTextStyles.headlineMedium),
+            Text(L10n.isAr ? 'تغيير الموقع' : 'Change Location',
+                style: AppTextStyles.headlineMedium),
             const SizedBox(height: 16),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
                   shape: BoxShape.circle,
+                  color: AppColors.primarySoft,
                 ),
-                child: const Icon(Icons.my_location_rounded, color: AppColors.primary, size: 20),
+                child: const Icon(Icons.my_location_rounded,
+                    color: AppColors.primary, size: 20),
               ),
-              title: Text(L10n.isAr ? 'استخدام موقعي الحالي' : 'Use current location',
-                          style: AppTextStyles.titleMedium),
-              onTap: () => Navigator.pop(context),
+              title: Text(
+                  L10n.isAr ? 'استخدام موقعي الحالي' : 'Use current location',
+                  style: AppTextStyles.titleMedium),
+              onTap: () {
+                Navigator.pop(sheet);
+                _useCurrentLocation(context);
+              },
             ),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
@@ -280,18 +352,20 @@ class _Header extends StatelessWidget {
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.location_on_rounded, color: AppColors.textSecondary),
-              title: Text(L10n.isAr ? 'سيئون، حضرموت' : 'Seiyun, Hadhramaut',
-                          style: AppTextStyles.titleMedium),
-              trailing: const Icon(Icons.check_circle_rounded, color: AppColors.success),
-              onTap: () => Navigator.pop(context),
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.location_city_rounded, color: AppColors.textHint),
-              title: Text(L10n.isAr ? 'تريم، حضرموت' : 'Tarim, Hadhramaut',
-                          style: AppTextStyles.bodyMedium),
-              onTap: () => Navigator.pop(context),
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.map_rounded,
+                    color: AppColors.primary, size: 20),
+              ),
+              title: Text(S.setLocationOnMap, style: AppTextStyles.titleMedium),
+              onTap: () {
+                Navigator.pop(sheet);
+                _pickOnMap(context);
+              },
             ),
           ],
         ),
@@ -305,28 +379,38 @@ class _Header extends StatelessWidget {
       children: [
         Flexible(
           child: _Pill(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.location_on_rounded,
-                    size: 18, color: AppColors.primary),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    L10n.isAr ? 'سيئون، حضرموت' : 'Seiyun, Hadhramaut',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
+            child: ValueListenableBuilder<double?>(
+              valueListenable: Session.latNotifier,
+              builder: (context, lat, _) {
+                final hasLoc = lat != null;
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.location_on_rounded,
+                        size: 18, color: AppColors.primary),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        hasLoc
+                            ? S.myCurrentLocation
+                            : (L10n.isAr
+                                ? 'سيئون، حضرموت'
+                                : 'Seiyun, Hadhramaut'),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 2),
-                Icon(Icons.keyboard_arrow_down_rounded,
-                    size: 16, color: AppColors.textSecondary),
-              ],
+                    const SizedBox(width: 2),
+                    Icon(Icons.keyboard_arrow_down_rounded,
+                        size: 16, color: AppColors.textSecondary),
+                  ],
+                );
+              },
             ),
             onTap: () => _showLocationPicker(context),
           ),
@@ -481,12 +565,14 @@ class _SignInPill extends StatelessWidget {
 
 class _AgentCard extends StatelessWidget {
   final AgentModel agent;
+  final double distanceKm;
   final bool selected;
   final bool isJoined;
   final VoidCallback onRequest;
 
   const _AgentCard({
     required this.agent,
+    required this.distanceKm,
     required this.selected,
     required this.isJoined,
     required this.onRequest,
@@ -566,8 +652,19 @@ class _AgentCard extends StatelessWidget {
               Icon(Icons.location_on_rounded,
                   size: 14, color: AppColors.textHint),
               const SizedBox(width: 4),
-              Text(S.kmAway(agent.distanceKm),
+              Text(S.kmAway(distanceKm),
                   style: AppTextStyles.bodySmall),
+              const SizedBox(width: 8),
+              Icon(Icons.schedule_rounded,
+                  size: 14, color: AppColors.primary),
+              const SizedBox(width: 3),
+              Text(
+                S.etaAway(Geo.etaMinutes(distanceKm)),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const Spacer(),
               SizedBox(
                 height: 36,

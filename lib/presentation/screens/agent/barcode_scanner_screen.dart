@@ -1,12 +1,15 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../core/l10n/l10n.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../widgets/avatar.dart';
 
+/// Real camera-based QR / barcode scanner. Uses [mobile_scanner] to read the
+/// citizen's QR (encoded as `GF|<name>|<code>`), then surfaces the matched
+/// customer in a confirmation card. Falls back to showing the raw scanned value
+/// when the code is not in the expected GasFlow format.
 class BarcodeScannerScreen extends StatefulWidget {
   final bool embedded;
   const BarcodeScannerScreen({super.key, this.embedded = false});
@@ -17,27 +20,64 @@ class BarcodeScannerScreen extends StatefulWidget {
 
 class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
     with SingleTickerProviderStateMixin {
+  final MobileScannerController _controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    formats: const [BarcodeFormat.qrCode, BarcodeFormat.code128],
+  );
+
   late final AnimationController _scan = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 2),
   )..repeat(reverse: true);
 
-  Timer? _timer;
   bool _detected = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _detected = true);
-    });
-  }
+  bool _torchOn = false;
+  String _code = '';
+  String _name = '';
+  String _address = '';
 
   @override
   void dispose() {
     _scan.dispose();
-    _timer?.cancel();
+    _controller.dispose();
     super.dispose();
+  }
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_detected) return;
+    final raw = capture.barcodes
+        .map((b) => b.rawValue)
+        .firstWhere((v) => v != null && v.isNotEmpty, orElse: () => null);
+    if (raw == null) return;
+    _parse(raw);
+    setState(() => _detected = true);
+    _controller.stop();
+  }
+
+  void _parse(String raw) {
+    final ar = L10n.isAr;
+    if (raw.startsWith('GF|')) {
+      final parts = raw.split('|');
+      _name = parts.length > 1 && parts[1].trim().isNotEmpty
+          ? parts[1].trim()
+          : (ar ? 'عميل GasFlow' : 'GasFlow customer');
+      _code = parts.length > 2 ? parts[2].trim() : raw;
+      _address = ar ? 'عميل معتمد' : 'Verified customer';
+    } else {
+      _code = raw;
+      _name = ar ? 'رمز ممسوح' : 'Scanned code';
+      _address = ar ? 'تحقّق من بيانات العميل' : 'Verify customer details';
+    }
+  }
+
+  void _rescan() {
+    setState(() {
+      _detected = false;
+      _code = '';
+      _name = '';
+      _address = '';
+    });
+    _controller.start();
   }
 
   @override
@@ -54,38 +94,43 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
                     size: 18, color: Colors.white),
                 onPressed: () => Navigator.pop(context),
               ),
-        title: Text(S.scanBarcode,
-            style: const TextStyle(color: Colors.white)),
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 12, left: 12),
-            child: Icon(Icons.flash_on_rounded, color: Colors.white),
+        title: Text(S.scanBarcode, style: const TextStyle(color: Colors.white)),
+        actions: [
+          IconButton(
+            icon: Icon(_torchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+                color: Colors.white),
+            onPressed: () {
+              _controller.toggleTorch();
+              setState(() => _torchOn = !_torchOn);
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.cameraswitch_rounded, color: Colors.white),
+            onPressed: () => _controller.switchCamera(),
           ),
         ],
       ),
       body: SafeArea(
         child: Stack(
           children: [
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AppColors.textPrimary,
-                    AppColors.textPrimary.withValues(alpha: 0.85),
-                  ],
-                ),
-              ),
+            // Live camera feed.
+            MobileScanner(
+              controller: _controller,
+              onDetect: _onDetect,
+              errorBuilder: (context, error, child) =>
+                  _CameraError(error: error),
+              fit: BoxFit.cover,
             ),
+            // Dark scrim for readability.
+            Container(color: Colors.black.withValues(alpha: 0.25)),
             Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     S.alignBarcode,
-                    style: AppTextStyles.bodyMedium
-                        .copyWith(color: Colors.white70),
+                    style:
+                        AppTextStyles.bodyMedium.copyWith(color: Colors.white),
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
@@ -96,40 +141,41 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
                         Container(
                           decoration: BoxDecoration(
                             border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.2),
+                              color: Colors.white.withValues(alpha: 0.35),
                               width: 1,
                             ),
                             borderRadius: BorderRadius.circular(20),
                           ),
                         ),
                         ..._buildCorners(),
-                        AnimatedBuilder(
-                          animation: _scan,
-                          builder: (_, __) => Positioned(
-                            left: 12,
-                            right: 12,
-                            top: 20 + (240 * _scan.value),
-                            child: Container(
-                              height: 2,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    AppColors.primary.withValues(alpha: 0),
-                                    AppColors.primaryLight,
-                                    AppColors.primary.withValues(alpha: 0),
+                        if (!_detected)
+                          AnimatedBuilder(
+                            animation: _scan,
+                            builder: (_, __) => Positioned(
+                              left: 12,
+                              right: 12,
+                              top: 20 + (240 * _scan.value),
+                              child: Container(
+                                height: 2,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      AppColors.primary.withValues(alpha: 0),
+                                      AppColors.primaryLight,
+                                      AppColors.primary.withValues(alpha: 0),
+                                    ],
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primary
+                                          .withValues(alpha: 0.6),
+                                      blurRadius: 16,
+                                    ),
                                   ],
                                 ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.primary
-                                        .withValues(alpha: 0.6),
-                                    blurRadius: 16,
-                                  ),
-                                ],
                               ),
                             ),
                           ),
-                        ),
                         if (_detected)
                           Container(
                             decoration: BoxDecoration(
@@ -152,9 +198,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
                     ),
                   ),
                   const SizedBox(height: 32),
-                  if (_detected)
-                    _DetectedCard(onDone: () => Navigator.pop(context))
-                  else
+                  if (!_detected)
                     Text(
                       S.searchingBarcode,
                       style: AppTextStyles.bodyMedium
@@ -163,6 +207,20 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
                 ],
               ),
             ),
+            if (_detected)
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _DetectedCard(
+                    name: _name,
+                    address: _address,
+                    code: _code,
+                    onDone: () => Navigator.pop(context),
+                    onRescan: _rescan,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -209,8 +267,8 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
         child: Container(
           width: size,
           height: size,
-          decoration: BoxDecoration(
-              border: cornerBorder(top: true, right: true)),
+          decoration:
+              BoxDecoration(border: cornerBorder(top: true, right: true)),
         ),
       ),
       Positioned(
@@ -219,8 +277,8 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
         child: Container(
           width: size,
           height: size,
-          decoration: BoxDecoration(
-              border: cornerBorder(bottom: true, left: true)),
+          decoration:
+              BoxDecoration(border: cornerBorder(bottom: true, left: true)),
         ),
       ),
       Positioned(
@@ -229,17 +287,69 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen>
         child: Container(
           width: size,
           height: size,
-          decoration: BoxDecoration(
-              border: cornerBorder(bottom: true, right: true)),
+          decoration:
+              BoxDecoration(border: cornerBorder(bottom: true, right: true)),
         ),
       ),
     ];
   }
 }
 
+class _CameraError extends StatelessWidget {
+  final MobileScannerException error;
+  const _CameraError({required this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    final ar = L10n.isAr;
+    final denied = error.errorCode == MobileScannerErrorCode.permissionDenied;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.no_photography_rounded,
+                color: Colors.white54, size: 56),
+            const SizedBox(height: 16),
+            Text(
+              denied
+                  ? (ar
+                      ? 'لم يتم منح إذن الكاميرا. فعّله من إعدادات التطبيق.'
+                      : 'Camera permission denied. Enable it in app settings.')
+                  : (ar
+                      ? 'تعذّر تشغيل الكاميرا'
+                      : 'Could not start the camera'),
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMedium.copyWith(color: Colors.white70),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _DetectedCard extends StatelessWidget {
+  final String name;
+  final String address;
+  final String code;
   final VoidCallback onDone;
-  const _DetectedCard({required this.onDone});
+  final VoidCallback onRescan;
+  const _DetectedCard({
+    required this.name,
+    required this.address,
+    required this.code,
+    required this.onDone,
+    required this.onRescan,
+  });
+
+  String get _initials {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return 'GF';
+    if (parts.length == 1) return parts.first.characters.take(2).toString();
+    return (parts[0].characters.first + parts[1].characters.first).toString();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -251,24 +361,19 @@ class _DetectedCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              const Avatar(initials: 'OS', size: 48),
+              Avatar(initials: _initials, size: 48),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(L10n.isAr ? 'عمر السبيعي' : 'Omar Al-Subaie',
-                        style: AppTextStyles.titleMedium),
+                    Text(name, style: AppTextStyles.titleMedium),
                     const SizedBox(height: 2),
-                    Text(
-                      L10n.isAr
-                          ? 'شقة 12 ب، المربع'
-                          : 'Apartment 12B, Al Murabba',
-                      style: AppTextStyles.bodySmall,
-                    ),
+                    Text(address, style: AppTextStyles.bodySmall),
                   ],
                 ),
               ),
@@ -297,8 +402,7 @@ class _DetectedCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: AppColors.primarySoft,
               borderRadius: BorderRadius.circular(14),
@@ -309,24 +413,38 @@ class _DetectedCard extends StatelessWidget {
                 const Icon(Icons.qr_code_2_rounded,
                     color: AppColors.primary, size: 22),
                 const SizedBox(width: 10),
-                Text(
-                  'GF-9C-2031',
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: AppColors.primaryDark,
-                    letterSpacing: 1.4,
+                Flexible(
+                  child: Text(
+                    code,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: AppColors.primaryDark,
+                      letterSpacing: 1.4,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: onDone,
-              icon: const Icon(Icons.local_shipping_rounded, size: 20),
-              label: Text(S.confirmDelivery),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onRescan,
+                  icon: const Icon(Icons.refresh_rounded, size: 20),
+                  label: Text(S.scanBarcode),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: onDone,
+                  icon: const Icon(Icons.local_shipping_rounded, size: 20),
+                  label: Text(S.confirmDelivery),
+                ),
+              ),
+            ],
           ),
         ],
       ),

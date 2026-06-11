@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
 import '../../presentation/screens/admin/admin_dashboard_screen.dart';
+import '../../presentation/screens/admin/admin_profile_screen.dart';
 import '../../presentation/screens/admin/complaints_review_screen.dart';
 import '../../presentation/screens/admin/manage_agents_screen.dart';
+import '../../presentation/screens/admin/pricing_screen.dart';
 import '../../presentation/screens/admin/users_management_screen.dart';
 import '../../presentation/screens/agent/barcode_scanner_screen.dart';
 import '../../presentation/screens/agent/citizen_requests_screen.dart';
@@ -38,6 +40,8 @@ class AppRoutes {
   static const String manageAgents = '/admin/manage-agents';
   static const String usersManagement = '/admin/users';
   static const String complaintsReview = '/admin/complaints';
+  static const String adminProfile = '/admin/profile';
+  static const String pricing = '/admin/pricing';
 
   // Agent
   static const String agentHome = '/agent/home';
@@ -79,6 +83,10 @@ class AppRoutes {
         return UsersManagementScreen();
       case complaintsReview:
         return ComplaintsReviewScreen();
+      case adminProfile:
+        return const AdminProfileScreen();
+      case pricing:
+        return const PricingScreen();
       case agentHome:
         return const AgentShell();
       case citizenRequests:

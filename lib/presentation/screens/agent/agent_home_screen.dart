@@ -3,6 +3,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../core/l10n/l10n.dart';
 import '../../../core/routes/app_routes.dart';
+import '../../../core/services/geo.dart';
 import '../../../core/session/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -277,6 +278,15 @@ class _AreaMapCard extends StatelessWidget {
         ? LatLng(lat, lng)
         : const LatLng(15.9437, 48.7888); // Seiyun (demo agent base)
 
+    // Nearest citizen → draw a route line and surface distance + ETA.
+    citizens.sort((a, b) => Geo.km(userLoc, LatLng(a.lat!, a.lng!))
+        .compareTo(Geo.km(userLoc, LatLng(b.lat!, b.lng!))));
+    final nearest = citizens.isEmpty ? null : citizens.first;
+    final nearestPoint =
+        nearest == null ? null : LatLng(nearest.lat!, nearest.lng!);
+    final nearestKm =
+        nearestPoint == null ? null : Geo.km(userLoc, nearestPoint);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -310,9 +320,51 @@ class _AreaMapCard extends StatelessWidget {
                   ),
               ],
               userLocation: userLoc,
+              route: nearestPoint == null ? null : [userLoc, nearestPoint],
             ),
           ),
         ),
+        if (nearest != null && nearestKm != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(16),
+              border:
+                  Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.route_rounded,
+                    size: 18, color: AppColors.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${S.nearestCitizen}: ${nearest.name}',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${S.kmAway(nearestKm)} · ${S.etaAway(Geo.etaMinutes(nearestKm))}',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }

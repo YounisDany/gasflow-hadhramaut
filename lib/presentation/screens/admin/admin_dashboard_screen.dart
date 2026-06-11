@@ -86,7 +86,8 @@ class AdminDashboardScreen extends StatelessWidget {
             SectionHeader(
               title: S.quickActions,
               action: S.viewAll,
-              onAction: () {},
+              onAction: () =>
+                  Navigator.pushNamed(context, AppRoutes.usersManagement),
             ),
             const SizedBox(height: 12),
             const _QuickActionsRow(),
@@ -140,7 +141,10 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Avatar(initials: 'AD', size: 46),
+        GestureDetector(
+          onTap: () => Navigator.pushNamed(context, AppRoutes.adminProfile),
+          child: const Avatar(initials: 'AD', size: 46),
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(

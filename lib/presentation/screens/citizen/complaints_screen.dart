@@ -3,9 +3,11 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/l10n/l10n.dart';
+import '../../../core/session/session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../data/services/auth_service.dart';
@@ -136,6 +138,14 @@ class _BarcodeTabState extends State<_BarcodeTab> {
   static const String _code = 'GF-9C-2031';
   bool _busy = false;
 
+  /// What the QR actually encodes: a pipe-delimited payload the agent scanner
+  /// parses (`GF|<name>|<code>`), falling back to the bare code when no name is
+  /// set yet. This is a real, camera-scannable QR.
+  String get _payload {
+    final name = Session.nameNotifier.value.trim();
+    return name.isEmpty ? _code : 'GF|$name|$_code';
+  }
+
   Future<Uint8List?> _capture() async {
     try {
       final boundary =
@@ -217,9 +227,19 @@ class _BarcodeTabState extends State<_BarcodeTab> {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: AppColors.border),
                   ),
-                  child: CustomPaint(
-                    size: const Size(200, 200),
-                    painter: _QrCodePainter(_code),
+                  child: QrImageView(
+                    data: _payload,
+                    version: QrVersions.auto,
+                    size: 200,
+                    backgroundColor: Colors.white,
+                    eyeStyle: const QrEyeStyle(
+                      eyeShape: QrEyeShape.square,
+                      color: AppColors.primaryDark,
+                    ),
+                    dataModuleStyle: const QrDataModuleStyle(
+                      dataModuleShape: QrDataModuleShape.square,
+                      color: AppColors.primaryDark,
+                    ),
                   ),
                 ),
               ),
@@ -436,97 +456,3 @@ class _ComplaintsTab extends StatelessWidget {
   }
 }
 
-/// Visual QR-code-style painter. Builds a deterministic 25×25 module grid
-/// from the input string so the same ID always renders identically. Includes
-/// the three corner finder patterns, a bottom-right alignment pattern, the
-/// timing rows, and pseudo-random data modules — visually indistinguishable
-/// from a real QR code at this size, but no actual encoding.
-class _QrCodePainter extends CustomPainter {
-  static const int _modules = 25;
-  final String data;
-
-  _QrCodePainter(this.data);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cell = size.width / _modules;
-    final paint = Paint()..color = AppColors.textPrimary;
-
-    final grid = List.generate(
-        _modules, (_) => List<bool>.filled(_modules, false));
-
-    void finder(int r, int c) {
-      for (int i = 0; i < 7; i++) {
-        for (int j = 0; j < 7; j++) {
-          final outer = i == 0 || i == 6 || j == 0 || j == 6;
-          final center = i >= 2 && i <= 4 && j >= 2 && j <= 4;
-          if (outer || center) grid[r + i][c + j] = true;
-        }
-      }
-    }
-
-    void alignment(int r, int c) {
-      for (int i = 0; i < 5; i++) {
-        for (int j = 0; j < 5; j++) {
-          final outer = i == 0 || i == 4 || j == 0 || j == 4;
-          final center = i == 2 && j == 2;
-          if (outer || center) grid[r + i][c + j] = true;
-        }
-      }
-    }
-
-    finder(0, 0);
-    finder(0, _modules - 7);
-    finder(_modules - 7, 0);
-    alignment(_modules - 9, _modules - 9);
-
-    for (int i = 8; i < _modules - 8; i++) {
-      grid[6][i] = i.isEven;
-      grid[i][6] = i.isEven;
-    }
-
-    int seed = 0x811C9DC5;
-    for (final cu in data.codeUnits) {
-      seed = ((seed ^ cu) * 0x01000193) & 0x7FFFFFFF;
-    }
-    int rng = seed | 1;
-
-    bool reserved(int r, int c) {
-      final inTopLeft = r < 8 && c < 8;
-      final inTopRight = r < 8 && c >= _modules - 8;
-      final inBottomLeft = r >= _modules - 8 && c < 8;
-      final inAlignment = r >= _modules - 9 &&
-          r < _modules - 4 &&
-          c >= _modules - 9 &&
-          c < _modules - 4;
-      final inTiming = r == 6 || c == 6;
-      return inTopLeft ||
-          inTopRight ||
-          inBottomLeft ||
-          inAlignment ||
-          inTiming;
-    }
-
-    for (int r = 0; r < _modules; r++) {
-      for (int c = 0; c < _modules; c++) {
-        if (reserved(r, c)) continue;
-        rng = (rng * 1103515245 + 12345) & 0x7FFFFFFF;
-        if (((rng >> 9) & 1) == 1) grid[r][c] = true;
-      }
-    }
-
-    for (int r = 0; r < _modules; r++) {
-      for (int c = 0; c < _modules; c++) {
-        if (grid[r][c]) {
-          canvas.drawRect(
-            Rect.fromLTWH(c * cell, r * cell, cell + 0.6, cell + 0.6),
-            paint,
-          );
-        }
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _QrCodePainter old) => old.data != data;
-}

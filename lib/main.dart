@@ -12,6 +12,7 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'data/services/auth_service.dart';
 import 'data/services/messaging_service.dart';
+import 'data/services/seed_service.dart';
 import 'data/store/app_store.dart';
 import 'firebase_options.dart';
 import 'presentation/widgets/offline_banner.dart';
@@ -21,6 +22,7 @@ Future<void> main() async {
   await Prefs.init();
   await ConnectivityService.init();
   SyncService.init();
+  appStore.loadPricing();
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -33,6 +35,10 @@ Future<void> main() async {
       cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
     );
     appStore.bind();
+    // Auto-seed the demo dataset on first run so admin/agent screens are never
+    // empty. With the open demo Firestore rules this needs no auth; it no-ops
+    // once any agent doc exists.
+    SeedService.seedIfEmpty();
     await MessagingService.init();
   } catch (e) {
     // Firebase not configured yet (no google-services.json / GoogleService-Info

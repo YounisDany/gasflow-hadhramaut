@@ -126,6 +126,8 @@ class _OrderHeaderCard extends StatelessWidget {
         return S.afterRefillMsg;
       case AppStatus.rejected:
         return S.statusRejected;
+      case AppStatus.suspended:
+        return S.statusSuspended;
     }
   }
 

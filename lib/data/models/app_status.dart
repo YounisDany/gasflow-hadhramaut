@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/l10n/l10n.dart';
 import '../../core/theme/app_colors.dart';
 
-enum AppStatus { pending, accepted, rejected, completed }
+enum AppStatus { pending, accepted, rejected, completed, suspended }
 
 /// Parse a Firestore-stored status name back to the enum (defaults to pending).
 AppStatus appStatusFromName(Object? name) => AppStatus.values.firstWhere(
@@ -22,6 +22,8 @@ extension AppStatusX on AppStatus {
         return S.statusRejected;
       case AppStatus.completed:
         return S.statusCompleted;
+      case AppStatus.suspended:
+        return S.statusSuspended;
     }
   }
 
@@ -35,6 +37,8 @@ extension AppStatusX on AppStatus {
         return AppColors.danger;
       case AppStatus.completed:
         return AppColors.primary;
+      case AppStatus.suspended:
+        return AppColors.textHint;
     }
   }
 
@@ -48,6 +52,8 @@ extension AppStatusX on AppStatus {
         return AppColors.dangerSoft;
       case AppStatus.completed:
         return AppColors.primarySoft;
+      case AppStatus.suspended:
+        return AppColors.divider;
     }
   }
 
@@ -61,6 +67,8 @@ extension AppStatusX on AppStatus {
         return Icons.cancel_rounded;
       case AppStatus.completed:
         return Icons.verified_rounded;
+      case AppStatus.suspended:
+        return Icons.pause_circle_rounded;
     }
   }
 }
