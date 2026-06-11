@@ -1,0 +1,54 @@
+rules_version = '2';
+
+// GasFlow Firestore rules. Pragmatic for a working prototype — tighten the
+// agents/citizens/orders write rules before production.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.email == 'admin@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    // Profiles: a user manages their own doc; admins can read/write all.
+    match /users/{uid} {
+      allow read, write: if signedIn() && (request.auth.uid == uid || isAdmin());
+    }
+
+    // Agents: everyone signed in can read; applications can be created by any
+    // signed-in user; only admins approve/reject (update) or delete.
+    match /agents/{id} {
+      allow read, create: if signedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // Citizens: signed-in users read/create (join request); agents approve.
+    match /citizens/{id} {
+      allow read, create, update: if signedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /orders/{id} {
+      allow read, create, update: if signedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /complaints/{id} {
+      allow read, create, update: if signedIn();
+      allow delete: if isAdmin();
+    }
+
+    // Notifications are written by the app; a Cloud Function fans them out to FCM.
+    match /notifications/{id} {
+      allow read, create, update: if signedIn();
+      allow delete: if isAdmin();
+    }
+  }
+}
